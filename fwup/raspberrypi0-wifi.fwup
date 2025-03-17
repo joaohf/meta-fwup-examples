@@ -18,18 +18,20 @@ require-fwup-version="0.15.0"  # For the trim() call
 # - FWUP_ROOTFS_IMG: final rootfs image, ready to write
 # - FWUP_ROOTFS_IMG_BLOCKS: rootfs image in blocks (512 bytes)
 #
-# These are used by Nerves libraries to introspect.
-define(NERVES_FW_PRODUCT, "Nerves Firmware")
-define(NERVES_FW_DESCRIPTION, "")
-define(NERVES_FW_VERSION, "${NERVES_SDK_VERSION}")
-define(NERVES_FW_PLATFORM, "rpi0")
-define(NERVES_FW_ARCHITECTURE, "arm")
-define(NERVES_FW_AUTHOR, "The Nerves Team")
+# These variables are used by Nerves libraries to introspect:
+#
+# - FWUP_META_PRODUCT
+# - FWUP_META_DESCRIPTION
+# - FWUP_META_VERSION
+# - FWUP_META_PLATFORM
+# - FWUP_META_ARCHITECTURE
+# - FWUP_META_AUTHOR
 
 define(NERVES_FW_DEVPATH, "/dev/mmcblk0")
 define(NERVES_FW_APPLICATION_PART0_DEVPATH, "/dev/mmcblk0p3") # Linux part number is 1-based
 define(NERVES_FW_APPLICATION_PART0_FSTYPE, "ext4")
 define(NERVES_FW_APPLICATION_PART0_TARGET, "/root")
+
 #define(NERVES_PROVISIONING, "${NERVES_SYSTEM}/images/fwup_include/provisioning.conf")
 
 # Default paths if not specified via the commandline
@@ -178,12 +180,12 @@ task complete {
         uboot_setenv(uboot-env, "a.nerves_fw_application_part0_devpath", ${NERVES_FW_APPLICATION_PART0_DEVPATH})
         uboot_setenv(uboot-env, "a.nerves_fw_application_part0_fstype", ${NERVES_FW_APPLICATION_PART0_FSTYPE})
         uboot_setenv(uboot-env, "a.nerves_fw_application_part0_target", ${NERVES_FW_APPLICATION_PART0_TARGET})
-        uboot_setenv(uboot-env, "a.nerves_fw_product", ${NERVES_FW_PRODUCT})
-        uboot_setenv(uboot-env, "a.nerves_fw_description", ${NERVES_FW_DESCRIPTION})
-        uboot_setenv(uboot-env, "a.nerves_fw_version", ${NERVES_FW_VERSION})
-        uboot_setenv(uboot-env, "a.nerves_fw_platform", ${NERVES_FW_PLATFORM})
-        uboot_setenv(uboot-env, "a.nerves_fw_architecture", ${NERVES_FW_ARCHITECTURE})
-        uboot_setenv(uboot-env, "a.nerves_fw_author", ${NERVES_FW_AUTHOR})
+        uboot_setenv(uboot-env, "a.nerves_fw_product", ${FWUP_META_PRODUCT})
+        uboot_setenv(uboot-env, "a.nerves_fw_description", ${FWUP_META_DESCRIPTION})
+        uboot_setenv(uboot-env, "a.nerves_fw_version", ${FWUP_META_VERSION})
+        uboot_setenv(uboot-env, "a.nerves_fw_platform", ${FWUP_META_PLATFORM})
+        uboot_setenv(uboot-env, "a.nerves_fw_architecture", ${FWUP_META_ARCHITECTURE})
+        uboot_setenv(uboot-env, "a.nerves_fw_author", ${FWUP_META_AUTHOR})
         uboot_setenv(uboot-env, "a.nerves_fw_vcs_identifier", ${NERVES_FW_VCS_IDENTIFIER})
         uboot_setenv(uboot-env, "a.nerves_fw_misc", ${NERVES_FW_MISC})
         uboot_setenv(uboot-env, "a.nerves_fw_uuid", "\${FWUP_META_UUID}")
@@ -218,8 +220,8 @@ task upgrade.a {
     require-partition-offset(1, ${ROOTFS_B_PART_OFFSET})
 
     # Verify the expected platform/architecture
-    require-uboot-variable(uboot-env, "b.nerves_fw_platform", "${NERVES_FW_PLATFORM}")
-    require-uboot-variable(uboot-env, "b.nerves_fw_architecture", "${NERVES_FW_ARCHITECTURE}")
+    require-uboot-variable(uboot-env, "b.nerves_fw_platform", "${FWUP_META_PLATFORM}")
+    require-uboot-variable(uboot-env, "b.nerves_fw_architecture", "${FWUP_META_ARCHITECTURE}")
 
     on-init {
         info("Upgrading partition A")
@@ -258,12 +260,12 @@ task upgrade.a {
         uboot_setenv(uboot-env, "a.nerves_fw_application_part0_devpath", ${NERVES_FW_APPLICATION_PART0_DEVPATH})
         uboot_setenv(uboot-env, "a.nerves_fw_application_part0_fstype", ${NERVES_FW_APPLICATION_PART0_FSTYPE})
         uboot_setenv(uboot-env, "a.nerves_fw_application_part0_target", ${NERVES_FW_APPLICATION_PART0_TARGET})
-        uboot_setenv(uboot-env, "a.nerves_fw_product", ${NERVES_FW_PRODUCT})
-        uboot_setenv(uboot-env, "a.nerves_fw_description", ${NERVES_FW_DESCRIPTION})
-        uboot_setenv(uboot-env, "a.nerves_fw_version", ${NERVES_FW_VERSION})
-        uboot_setenv(uboot-env, "a.nerves_fw_platform", ${NERVES_FW_PLATFORM})
-        uboot_setenv(uboot-env, "a.nerves_fw_architecture", ${NERVES_FW_ARCHITECTURE})
-        uboot_setenv(uboot-env, "a.nerves_fw_author", ${NERVES_FW_AUTHOR})
+        uboot_setenv(uboot-env, "a.nerves_fw_product", ${FWUP_META_PRODUCT})
+        uboot_setenv(uboot-env, "a.nerves_fw_description", ${FWUP_META_DESCRIPTION})
+        uboot_setenv(uboot-env, "a.nerves_fw_version", ${FWUP_META_VERSION})
+        uboot_setenv(uboot-env, "a.nerves_fw_platform", ${FWUP_META_PLATFORM})
+        uboot_setenv(uboot-env, "a.nerves_fw_architecture", ${FWUP_META_ARCHITECTURE})
+        uboot_setenv(uboot-env, "a.nerves_fw_author", ${FWUP_META_AUTHOR})
         uboot_setenv(uboot-env, "a.nerves_fw_vcs_identifier", ${NERVES_FW_VCS_IDENTIFIER})
         uboot_setenv(uboot-env, "a.nerves_fw_misc", ${NERVES_FW_MISC})
         uboot_setenv(uboot-env, "a.nerves_fw_uuid", "\${FWUP_META_UUID}")
@@ -282,8 +284,8 @@ task upgrade.b {
     require-partition-offset(1, ${ROOTFS_A_PART_OFFSET})
 
     # Verify the expected platform/architecture
-    require-uboot-variable(uboot-env, "a.nerves_fw_platform", "${NERVES_FW_PLATFORM}")
-    require-uboot-variable(uboot-env, "a.nerves_fw_architecture", "${NERVES_FW_ARCHITECTURE}")
+    require-uboot-variable(uboot-env, "a.nerves_fw_platform", "${FWUP_META_PLATFORM}")
+    require-uboot-variable(uboot-env, "a.nerves_fw_architecture", "${FWUP_META_ARCHITECTURE}")
 
     on-init {
         info("Upgrading partition B")
@@ -320,12 +322,12 @@ task upgrade.b {
         uboot_setenv(uboot-env, "b.nerves_fw_application_part0_devpath", ${NERVES_FW_APPLICATION_PART0_DEVPATH})
         uboot_setenv(uboot-env, "b.nerves_fw_application_part0_fstype", ${NERVES_FW_APPLICATION_PART0_FSTYPE})
         uboot_setenv(uboot-env, "b.nerves_fw_application_part0_target", ${NERVES_FW_APPLICATION_PART0_TARGET})
-        uboot_setenv(uboot-env, "b.nerves_fw_product", ${NERVES_FW_PRODUCT})
-        uboot_setenv(uboot-env, "b.nerves_fw_description", ${NERVES_FW_DESCRIPTION})
-        uboot_setenv(uboot-env, "b.nerves_fw_version", ${NERVES_FW_VERSION})
-        uboot_setenv(uboot-env, "b.nerves_fw_platform", ${NERVES_FW_PLATFORM})
-        uboot_setenv(uboot-env, "b.nerves_fw_architecture", ${NERVES_FW_ARCHITECTURE})
-        uboot_setenv(uboot-env, "b.nerves_fw_author", ${NERVES_FW_AUTHOR})
+        uboot_setenv(uboot-env, "b.nerves_fw_product", ${FWUP_META_PRODUCT})
+        uboot_setenv(uboot-env, "b.nerves_fw_description", ${FWUP_META_DESCRIPTION})
+        uboot_setenv(uboot-env, "b.nerves_fw_version", ${FWUP_META_VERSION})
+        uboot_setenv(uboot-env, "b.nerves_fw_platform", ${FWUP_META_PLATFORM})
+        uboot_setenv(uboot-env, "b.nerves_fw_architecture", ${FWUP_META_ARCHITECTURE})
+        uboot_setenv(uboot-env, "b.nerves_fw_author", ${FWUP_META_AUTHOR})
         uboot_setenv(uboot-env, "b.nerves_fw_vcs_identifier", ${NERVES_FW_VCS_IDENTIFIER})
         uboot_setenv(uboot-env, "b.nerves_fw_misc", ${NERVES_FW_MISC})
         uboot_setenv(uboot-env, "b.nerves_fw_uuid", "\${FWUP_META_UUID}")
@@ -340,8 +342,8 @@ task upgrade.b {
 }
 
 task upgrade.unexpected {
-    require-uboot-variable(uboot-env, "a.nerves_fw_platform", "${NERVES_FW_PLATFORM}")
-    require-uboot-variable(uboot-env, "a.nerves_fw_architecture", "${NERVES_FW_ARCHITECTURE}")
+    require-uboot-variable(uboot-env, "a.nerves_fw_platform", "${FWUP_META_PLATFORM}")
+    require-uboot-variable(uboot-env, "a.nerves_fw_architecture", "${FWUP_META_ARCHITECTURE}")
     on-init {
         error("Please check the media being upgraded. It doesn't look like either the A or B partitions are active.")
     }
@@ -349,19 +351,19 @@ task upgrade.unexpected {
 
 task upgrade.wrongplatform {
     on-init {
-        error("Expecting platform=${NERVES_FW_PLATFORM} and architecture=${NERVES_FW_ARCHITECTURE}")
+        error("Expecting platform=${FWUP_META_PLATFORM} and architecture=${FWUP_META_ARCHITECTURE}")
     }
 }
 
 #task provision {
-#    require-uboot-variable(uboot-env, "a.nerves_fw_platform", "${NERVES_FW_PLATFORM}")
-#    require-uboot-variable(uboot-env, "a.nerves_fw_architecture", "${NERVES_FW_ARCHITECTURE}")
+#    require-uboot-variable(uboot-env, "a.nerves_fw_platform", "${FWUP_META_PLATFORM}")
+#    require-uboot-variable(uboot-env, "a.nerves_fw_architecture", "${FWUP_META_ARCHITECTURE}")
 #    on-init {
 #        include("${NERVES_PROVISIONING}")
 #    }
 #}
 #task provision.wrongplatform {
 #    on-init {
-#        error("Expecting platform=${NERVES_FW_PLATFORM} and architecture=${NERVES_FW_ARCHITECTURE}")
+#        error("Expecting platform=${FWUP_META_PLATFORM} and architecture=${FWUP_META_ARCHITECTURE}")
 #    }
 #}

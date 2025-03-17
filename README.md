@@ -17,17 +17,21 @@ For `conf/bblayers.conf` you have to add
 BBLAYERS ?= " \
    ...
   path_to_source/sources/meta-fwup-examples \
-  path_to_source/sources/meta-qemu-bsp \
   "
 ```
 
 Or, using `bitbake-layers`:
 
 ```
-bitbake-layers add-layer meta-qemu-bsp
-
 bitbake-layers add-layer meta-fwup-examples
 ```
+
+This layer has configurations for QEMU with uboot and raspberry pi based machines.
+
+Two additional layers will be necessary depending on your use case:
+
+ * [meta-qemu-bsp](https://github.com/meta-erlang/meta-qemu-bsp)
+ * [meta-raspberry](https://github.com/agherzan/meta-raspberrypi)
 
 ## Enabling fwup image class
 
@@ -57,7 +61,16 @@ There is an additional file created by meta-fwup layer:
 
 This example builds a Yocto image with u-boot as bootloader and prepared to work with QEMU emulator.
 
-Add the following configuration in `conf/local.conf` file:
+It's necessary to include the layer meta-qemu-bsp in `conf/bblayers.conf` configuration file:
+
+```text
+BBLAYERS ?= " \
+   ...
+  path_to_source/sources/meta-qemu-bsp \
+  "
+```
+
+To active the fwup genration, add the following configuration in `conf/local.conf` file:
 
 ```
 # fwup support
