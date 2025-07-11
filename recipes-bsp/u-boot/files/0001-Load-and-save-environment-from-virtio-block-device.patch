@@ -1,0 +1,294 @@
+From 3a15f889a6b32860707cbad76ce936f402a28e41 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Jo=C3=A3o=20Henrique=20Ferreira=20de=20Freitas?=
+ <joaohf@gmail.com>
+Date: Thu, 26 Dec 2024 16:40:50 -0300
+Subject: [PATCH] Load and save environment from virtio block device
+
+ENV_IS_IN_VIRTIO_BLK uses CONFIG_ENV_OFFSET and CONFIG_ENV_SIZE in order
+to read u-boot environment variables from a virtio block device.
+
+The main use case is for testing u-boot with qemu where a specific
+virtio block device is used for booting. That virtio_blk could be
+partitioned as:
+
+ +----------------------------+
+ | MBR                        |
+ +----------------------------+
+ | Firmware configuration data|
+ | (formatted as uboot env)   |
+ +----------------------------+
+ | p0: Boot partition (FAT32) |
+ | u-boot.img                 |
+ | zImage                     |
+ +----------------------------+
+ | p1: Rootfs A               |
+ +----------------------------+
+ | p2: Rootfs B               |
+ +----------------------------+
+ | p3: Application            |
+ +----------------------------+
+
+Using CONFIG_ENV_OFFSET and CONFIG_ENV_SIZE it's possible to make u-boot
+load environment variables properly.
+
+Upstream-Status: Pending
+---
+ env/Kconfig            |  31 +++++++++++-
+ env/Makefile           |  15 +++---
+ env/env.c              |   3 ++
+ env/virtio_blk.c       | 111 +++++++++++++++++++++++++++++++++++++++++
+ include/env_internal.h |  21 ++++++++
+ 5 files changed, 172 insertions(+), 9 deletions(-)
+ create mode 100644 env/virtio_blk.c
+
+diff --git a/env/Kconfig b/env/Kconfig
+index 031cf58186a..ee1750c1f3e 100644
+--- a/env/Kconfig
++++ b/env/Kconfig
+@@ -61,7 +61,7 @@ config ENV_IS_DEFAULT
+ 		     !ENV_IS_IN_MMC && !ENV_IS_IN_NAND && \
+ 		     !ENV_IS_IN_NVRAM && !ENV_IS_IN_ONENAND && \
+ 		     !ENV_IS_IN_REMOTE && !ENV_IS_IN_SPI_FLASH && \
+-		     !ENV_IS_IN_UBI
++		     !ENV_IS_IN_UBI && !ENV_IS_IN_VIRTIO_BLK
+ 	select ENV_IS_NOWHERE
+ 
+ config ENV_IS_NOWHERE
+@@ -374,6 +374,33 @@ config ENV_IS_IN_SPI_FLASH
+ 	  during a "saveenv" operation. CONFIG_ENV_OFFSET_REDUND must be
+ 	  aligned to an erase sector boundary.
+ 
++config ENV_IS_IN_VIRTIO_BLK
++	bool "Environment is in a virtio block device"
++	depends on !CHAIN_OF_TRUST
++	help
++	  Define this if you want to use the virtio block for the environment.
++
++	  - CONFIG_ENV_OFFSET:
++	  - CONFIG_ENV_SIZE:
++
++	  These two #defines specify the offset and size of the environment area
++	  within the virtio block device.
++
++config ENV_VIRTIO_BLK_INTERFACE
++	string "Name of the block device for the environment"
++	depends on ENV_IS_IN_VIRTIO_BLK
++	default "virtio"
++	help
++	  Define this to a string that is the name of the block device.
++
++config ENV_VIRTIO_BLK_DEVICE
++	int "Device and partition for where to store the environment in virtio block device."
++	depends on ENV_IS_IN_VIRTIO_BLK
++	default 0
++	help
++	  Define this to a string that is the name of the block device.
++
++
+ config ENV_SECT_SIZE_AUTO
+ 	bool "Use automatically detected sector size"
+ 	depends on ENV_IS_IN_SPI_FLASH
+@@ -564,7 +591,7 @@ config ENV_ADDR_REDUND
+ config ENV_OFFSET
+ 	hex "Environment offset"
+ 	depends on ENV_IS_IN_EEPROM || ENV_IS_IN_MMC || ENV_IS_IN_NAND || \
+-		    ENV_IS_IN_SPI_FLASH
++		    ENV_IS_IN_SPI_FLASH || ENV_IS_IN_VIRTIO_BLK
+ 	default 0x3f8000 if ARCH_ROCKCHIP && ENV_IS_IN_MMC
+ 	default 0x140000 if ARCH_ROCKCHIP && ENV_IS_IN_SPI_FLASH
+ 	default 0xF0000 if ARCH_SUNXI
+diff --git a/env/Makefile b/env/Makefile
+index a54e924d419..5af1d15f005 100644
+--- a/env/Makefile
++++ b/env/Makefile
+@@ -20,12 +20,13 @@ obj-$(CONFIG_ENV_IS_IN_REMOTE) += remote.o
+ obj-$(CONFIG_ENV_IS_IN_UBI) += ubi.o
+ endif
+ 
+-obj-$(CONFIG_$(PHASE_)ENV_IS_NOWHERE) += nowhere.o
+-obj-$(CONFIG_$(PHASE_)ENV_IS_IN_MMC) += mmc.o
+-obj-$(CONFIG_$(PHASE_)ENV_IS_IN_FAT) += fat.o
+-obj-$(CONFIG_$(PHASE_)ENV_IS_IN_EXT4) += ext4.o
+-obj-$(CONFIG_$(PHASE_)ENV_IS_IN_NAND) += nand.o
+-obj-$(CONFIG_$(PHASE_)ENV_IS_IN_SPI_FLASH) += sf.o
+-obj-$(CONFIG_$(PHASE_)ENV_IS_IN_FLASH) += flash.o
++obj-$(CONFIG_$(SPL_TPL_)ENV_IS_NOWHERE) += nowhere.o
++obj-$(CONFIG_$(SPL_TPL_)ENV_IS_IN_MMC) += mmc.o
++obj-$(CONFIG_$(SPL_TPL_)ENV_IS_IN_FAT) += fat.o
++obj-$(CONFIG_$(SPL_TPL_)ENV_IS_IN_EXT4) += ext4.o
++obj-$(CONFIG_$(SPL_TPL_)ENV_IS_IN_NAND) += nand.o
++obj-$(CONFIG_$(SPL_TPL_)ENV_IS_IN_SPI_FLASH) += sf.o
++obj-$(CONFIG_$(SPL_TPL_)ENV_IS_IN_FLASH) += flash.o
++obj-$(CONFIG_$(SPL_TPL_)ENV_IS_IN_VIRTIO_BLK) += virtio_blk.o
+ 
+ CFLAGS_embedded.o := -Wa,--no-warn -DENV_CRC=$(shell tools/envcrc 2>/dev/null)
+diff --git a/env/env.c b/env/env.c
+index bcc189e14db..6c39848d77c 100644
+--- a/env/env.c
++++ b/env/env.c
+@@ -61,6 +61,9 @@ static enum env_location env_locations[] = {
+ #ifdef CONFIG_ENV_IS_IN_UBI
+ 	ENVL_UBI,
+ #endif
++#ifdef CONFIG_ENV_IS_IN_VIRTIO_BLK
++	ENVL_VIRTIO_BLK,
++#endif
+ #ifdef CONFIG_ENV_IS_NOWHERE
+ 	ENVL_NOWHERE,
+ #endif
+diff --git a/env/virtio_blk.c b/env/virtio_blk.c
+new file mode 100644
+index 00000000000..540a61de5dc
+--- /dev/null
++++ b/env/virtio_blk.c
+@@ -0,0 +1,111 @@
++// SPDX-License-Identifier: GPL-2.0+
++/*
++ * (c) Copyright 2011 by Tigris Elektronik GmbH
++ * (c) Copyright 2024 by João Henrique Ferreira de Freitas
++ *
++ * Author:
++ *  João Henrique Ferreira de Freitas <joaohf@gmail.com>, based on
++ *  env/fat.c from Maximilian Schwerin <mvs@tigris.de>
++ */
++
++#include <command.h>
++#include <env.h>
++#include <env_internal.h>
++#include <part.h>
++#include <malloc.h>
++#include <memalign.h>
++#include <search.h>
++#include <errno.h>
++#include <blk.h>
++#include <virtio.h>
++#include <asm/cache.h>
++#include <asm/global_data.h>
++#include <linux/stddef.h>
++
++DECLARE_GLOBAL_DATA_PTR;
++
++__weak const char *env_virtio_blk_get_intf(void)
++{
++	return (const char *)CONFIG_ENV_VIRTIO_BLK_INTERFACE;
++}
++
++__weak int env_virtio_blk_get_dev(void)
++{
++	return CONFIG_ENV_VIRTIO_BLK_DEVICE;
++}
++
++static int env_virtio_blk_save(void)
++{
++	env_t __aligned(ARCH_DMA_MINALIGN) env_new;
++	struct blk_desc *dev_desc = NULL;
++	int err;
++	lbaint_t blk = CONFIG_ENV_OFFSET;
++	ulong cnt = CONFIG_ENV_SIZE / 512;
++	ulong n;
++
++	int dev = env_virtio_blk_get_dev();
++
++	err = env_export(&env_new);
++	if (err)
++		return err;
++
++	err = blk_get_desc(UCLASS_VIRTIO, dev, &dev_desc);
++	if (err)
++		return 1;
++
++    n = blk_dwrite(dev_desc, blk, cnt, (void *)&env_new);
++
++// #ifdef CONFIG_SYS_REDUNDAND_ENVIRONMENT
++// 	if (gd->env_valid == ENV_VALID)
++// 		file = CONFIG_ENV_FAT_FILE_REDUND;
++// #endif
++
++#ifdef CONFIG_SYS_REDUNDAND_ENVIRONMENT
++	gd->env_valid = (gd->env_valid == ENV_REDUND) ? ENV_VALID : ENV_REDUND;
++#endif
++
++	return n == cnt ? 0 : 1;
++}
++
++static int env_virtio_blk_load(void)
++{
++	ALLOC_CACHE_ALIGN_BUFFER(char, buf1, CONFIG_ENV_SIZE);
++#ifdef CONFIG_SYS_REDUNDAND_ENVIRONMENT
++	ALLOC_CACHE_ALIGN_BUFFER(char, buf2, CONFIG_ENV_SIZE);
++	int err2;
++#endif
++	struct blk_desc *dev_desc;
++	int err;
++	int dev = env_virtio_blk_get_dev();
++	
++	const char *ifname = env_virtio_blk_get_intf();
++
++	lbaint_t blk = CONFIG_ENV_OFFSET;
++	ulong cnt = CONFIG_ENV_SIZE / 512;
++	ulong n;
++
++	if (!strcmp(ifname, "virtio"))
++		virtio_init();
++	else
++	    goto err_env_relocate;
++
++	err = blk_get_desc(UCLASS_VIRTIO, dev, &dev_desc);
++	if (err)
++		goto err_env_relocate;
++
++    n = blk_dread(dev_desc, blk, cnt, buf1);
++
++    return env_import(buf1, 1, H_EXTERNAL);
++
++err_env_relocate:
++	env_set_default(NULL, 0);
++
++	return -EIO;
++}
++
++U_BOOT_ENV_LOCATION(virtio_blk) = {
++	.location	= ENVL_VIRTIO_BLK,
++	ENV_NAME("VIRTIO_BLK")
++	.load		= env_virtio_blk_load,
++	.save		= ENV_SAVE_PTR(env_virtio_blk_save),
++};
+diff --git a/include/env_internal.h b/include/env_internal.h
+index c1c0727e4d0..a593d2ca535 100644
+--- a/include/env_internal.h
++++ b/include/env_internal.h
+@@ -114,6 +114,7 @@ enum env_location {
+ 	ENVL_REMOTE,
+ 	ENVL_SPI_FLASH,
+ 	ENVL_UBI,
++	ENVL_VIRTIO_BLK,
+ 	ENVL_NOWHERE,
+ 
+ 	ENVL_COUNT,
+@@ -271,6 +272,26 @@ const char *env_fat_get_intf(void);
+  * Return: string of device and partition
+  */
+ char *env_fat_get_dev_part(void);
++
++/**
++ * env_virtio_blk_get_intf() - Provide the interface for env in virtio_blk
++ *
++ * It is a weak function allowing board to overidde the default interface for
++ * U-Boot env in virtio block: CONFIG_ENV_VIRTIO_BLK_INTERFACE
++ *
++ * Return: string of interface, empty if not supported
++ */
++const char *env_virtio_blk_get_intf(void);
++
++/**
++ * env_virtio_blk_get_dev() - Provide the device for env in virtio blk
++ *
++ * It is a weak function allowing board to overidde the default device and
++ * partition used for U-Boot env in virtio block: CONFIG_ENV_VIRTIO_BLK_DEVICE
++ *
++ * Return: string of device and partition
++ */
++int env_virtio_blk_get_dev(void);
+ #endif /* DO_DEPS_ONLY */
+ 
+ #endif /* _ENV_INTERNAL_H_ */
